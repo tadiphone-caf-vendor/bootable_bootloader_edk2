@@ -39,6 +39,7 @@
 
 #define DTB_PAD_SIZE 2048
 #define NUM_SPLASHMEM_PROP_ELEM 4
+#define DEFAULT_CELL_SIZE 2
 
 STATIC struct FstabNode FstabTable = {"/firmware/android/fstab", "dev",
                                       "/soc/"};
@@ -218,14 +219,106 @@ fdt_check_header_ext (VOID *fdt)
 }
 
 STATIC
+VOID
+UpdateGranuleInfo (VOID *fdt)
+{
+  EFI_STATUS Status = EFI_SUCCESS;
+  INT32 GranuleNodeOffset;
+  UINT32 GranuleSize;
+  INT32 Ret;
+
+  GranuleNodeOffset = fdt_path_offset (fdt, "/mem-offline");
+  if (GranuleNodeOffset < 0) {
+    DEBUG ((EFI_D_ERROR, "WARNING: Could not find mem-offline node.\n"));
+    return;
+  }
+
+  Status = GetGranuleSize (&GranuleSize);
+  if (EFI_ERROR (Status)) {
+    DEBUG ((EFI_D_ERROR,
+            "Update Granule Size failed!!! Status = %r\r\n",
+            Status));
+    return;
+  }
+
+  Ret = fdt_setprop_u32 (fdt, GranuleNodeOffset, "granule", GranuleSize);
+  if (Ret) {
+    DEBUG ((EFI_D_ERROR, "WARNING: Granule size update failed.\n"));
+  }
+}
+
+STATIC
 EFI_STATUS
-AddMemMap (VOID *fdt, UINT32 MemNodeOffset, BOOLEAN BootWith32Bit)
+QueryMemoryCellSize (IN VOID *Fdt, OUT UINT32 *MemoryCellLen)
+{
+  INT32 RootOffset;
+  INT32 PropLen;
+  UINT32 AddrCellSize = 0;
+  UINT32 SizeCellSize = 0;
+  UINT32 *Prop = NULL;
+
+  RootOffset = fdt_path_offset (Fdt, "/");
+  if (RootOffset < 0) {
+    DEBUG ((EFI_D_ERROR, "Error finding root offset\n"));
+    return EFI_NOT_FOUND;
+  }
+
+  /* Find address-cells size */
+  Prop = (UINT32 *) fdt_getprop (Fdt, RootOffset, "#address-cells", &PropLen);
+  if (Prop &&
+      PropLen > 0) {
+    AddrCellSize = fdt32_to_cpu (*Prop);
+  } else {
+    DEBUG ((EFI_D_ERROR, "Error finding #address-cells property\n"));
+    return EFI_NOT_FOUND;
+  }
+
+  /* Find size-cells size */
+  Prop =(UINT32 *) fdt_getprop (Fdt, RootOffset, "#size-cells", &PropLen);
+  if (Prop &&
+      PropLen > 0) {
+    SizeCellSize = fdt32_to_cpu (*Prop);
+  } else {
+    DEBUG ((EFI_D_ERROR, "Error finding #size-cells property\n"));
+    return EFI_NOT_FOUND;
+  }
+
+  if (AddrCellSize > DEFAULT_CELL_SIZE ||
+      SizeCellSize > DEFAULT_CELL_SIZE ||
+      SizeCellSize == 0 ||
+      AddrCellSize == 0) {
+    DEBUG ((EFI_D_ERROR, "Error unsupported cell size value: #address-cell %d" \
+              "#size-cell\n", AddrCellSize, SizeCellSize));
+    return EFI_INVALID_PARAMETER;
+  }
+
+  /* Make sure memory cell size and address cell size are same */
+  if (AddrCellSize == SizeCellSize) {
+    *MemoryCellLen = AddrCellSize;
+  } else {
+    DEBUG ((EFI_D_ERROR, "Mismatch memory address cell and size cell size\n"));
+    return EFI_INVALID_PARAMETER;
+  }
+
+  return EFI_SUCCESS;
+}
+
+STATIC
+EFI_STATUS
+AddMemMap (VOID *Fdt, UINT32 MemNodeOffset, BOOLEAN BootWith32Bit)
 {
   EFI_STATUS Status = EFI_NOT_FOUND;
   INT32 ret = 0;
   RamPartitionEntry *RamPartitions = NULL;
   UINT32 NumPartitions = 0;
   UINT32 i = 0;
+  UINT32 MemoryCellLen = 0;
+
+  Status = QueryMemoryCellSize (Fdt, &MemoryCellLen);
+  if (EFI_ERROR (Status)) {
+    DEBUG ((EFI_D_ERROR, "ERROR: Not a valid memory node found!\n"));
+    return Status;
+  }
 
   Status = GetRamPartitions (&RamPartitions, &NumPartitions);
   if (EFI_ERROR (Status)) {
@@ -242,12 +335,13 @@ AddMemMap (VOID *fdt, UINT32 MemNodeOffset, BOOLEAN BootWith32Bit)
     DEBUG ((EFI_D_INFO, "Add Base: 0x%016lx Available Length: 0x%016lx \n",
             RamPartitions[i].Base, RamPartitions[i].AvailableLength));
 
-    if (BootWith32Bit) {
-      ret = dev_tree_add_mem_info (fdt, MemNodeOffset, RamPartitions[i].Base,
-                                   RamPartitions[i].AvailableLength);
+    if (MemoryCellLen == 1) {
+      ret = dev_tree_add_mem_info (Fdt, MemNodeOffset, RamPartitions[i].Base,
+                                    RamPartitions[i].AvailableLength);
     } else {
-      ret = dev_tree_add_mem_infoV64 (fdt, MemNodeOffset, RamPartitions[i].Base,
-                                      RamPartitions[i].AvailableLength);
+      ret = dev_tree_add_mem_infoV64 (Fdt, MemNodeOffset,
+                                        RamPartitions[i].Base,
+                                        RamPartitions[i].AvailableLength);
     }
 
     if (ret) {
@@ -273,11 +367,16 @@ target_dev_tree_mem (VOID *fdt, UINT32 MemNodeOffset, BOOLEAN BootWith32Bit)
 
   /* Get Available memory from partition table */
   Status = AddMemMap (fdt, MemNodeOffset, BootWith32Bit);
-  if (EFI_ERROR (Status))
+  if (EFI_ERROR (Status)) {
     DEBUG ((EFI_D_ERROR,
             "Invalid memory configuration, check memory partition table: %r\n",
             Status));
+    goto out;
+  }
 
+  UpdateGranuleInfo (fdt);
+
+out:
   return Status;
 }
 

@@ -186,6 +186,13 @@ typedef struct {
   VOID *Data;
 } CmdInfo;
 
+STATIC BOOLEAN UsbTimerStarted;
+
+BOOLEAN IsUsbTimerStarted (VOID)
+{
+  return UsbTimerStarted;
+}
+
 #ifdef DISABLE_PARALLEL_DOWNLOAD_FLASH
 BOOLEAN IsDisableParallelDownloadFlash (VOID)
 {
@@ -508,7 +515,7 @@ WriteToDisk (IN EFI_BLOCK_IO_PROTOCOL *BlockIo,
              IN UINT64 Size,
              IN UINT64 offset)
 {
-  return WriteBlockToPartition (BlockIo, offset, Size, Image);
+  return WriteBlockToPartition (BlockIo, Handle, offset, Size, Image);
 }
 
 STATIC BOOLEAN
@@ -1033,7 +1040,7 @@ HandleRawImgFlash (IN CHAR16 *PartitionName,
     return EFI_VOLUME_FULL;
   }
 
-  Status = WriteBlockToPartition (BlockIo, 0, Size, Image);
+  Status = WriteBlockToPartition (BlockIo, Handle, 0, Size, Image);
   if (EFI_ERROR (Status)) {
     DEBUG ((EFI_D_ERROR, "Writing Block to partition Failure\n"));
   }
@@ -1352,6 +1359,7 @@ STATIC VOID StopUsbTimer (VOID)
     gBS->CloseEvent (UsbTimerEvent);
     UsbTimerEvent = NULL;
   }
+  UsbTimerStarted = FALSE;
 }
 #else
 STATIC VOID StopUsbTimer (VOID)
@@ -1666,6 +1674,7 @@ CmdFlash (IN CONST CHAR8 *arg, IN VOID *data, IN UINT32 sz)
         IsFlashComplete = TRUE;
         StopUsbTimer ();
       } else {
+        UsbTimerStarted = TRUE;
         FastbootOkay ("");
       }
     }
@@ -2191,11 +2200,9 @@ STATIC VOID CmdGetVarAll (VOID)
   CHAR8 GetVarAll[MAX_RSP_SIZE];
 
   for (Var = Varlist; Var; Var = Var->next) {
-    AsciiStrnCpyS (GetVarAll, sizeof (GetVarAll), Var->name,
-                   AsciiStrLen (Var->name));
+    AsciiStrnCpyS (GetVarAll, sizeof (GetVarAll), Var->name, MAX_RSP_SIZE);
     AsciiStrnCatS (GetVarAll, sizeof (GetVarAll), ":", AsciiStrLen (":"));
-    AsciiStrnCatS (GetVarAll, sizeof (GetVarAll), Var->value,
-                   AsciiStrLen (Var->value));
+    AsciiStrnCatS (GetVarAll, sizeof (GetVarAll), Var->value, MAX_RSP_SIZE);
     FastbootInfo (GetVarAll);
     /* Wait for the transfer to complete */
     WaitForTransferComplete ();
@@ -2398,7 +2405,6 @@ SetDeviceUnlock (UINT32 Type, BOOLEAN State)
          return;
     }
     FastbootOkay ("");
-    RebootDevice (RECOVERY_MODE);
   }
 }
 #endif

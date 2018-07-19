@@ -65,6 +65,9 @@ STATIC CHAR8 *SkipRamFs = " skip_initramfs";
 STATIC CHAR8 DisplayCmdLine[MAX_DISPLAY_CMD_LINE];
 STATIC UINTN DisplayCmdLineLen = sizeof (DisplayCmdLine);
 
+#define MAX_DTBO_IDX_STR 64
+STATIC CHAR8 *AndroidBootDtboIdx = " androidboot.dtbo_idx=";
+
 #define STR_COPY(Dst, Src)                                               \
   {                                                                      \
      while (*Src) {                                                      \
@@ -484,6 +487,12 @@ UpdateCmdLineParams (UpdateCmdLineParamList *Param,
      --Dst;
      STR_COPY (Dst, Src);
    }
+
+  if (Param->DtboIdxStr != NULL) {
+    Src = Param->DtboIdxStr;
+    --Dst;
+    STR_COPY (Dst, Src);
+  }
    return EFI_SUCCESS;
 }
 
@@ -509,6 +518,8 @@ UpdateCmdLine (CONST CHAR8 *CmdLine,
   CHAR8 StrSerialNum[SERIAL_NUM_SIZE];
   BOOLEAN MdtpActive = FALSE;
   UpdateCmdLineParamList Param = {0};
+  CHAR8 DtboIdxStr[MAX_DTBO_IDX_STR] = "\0";
+  INT32 DtboIdx = INVALID_PTN;
 
   Status = BoardSerialNum (StrSerialNum, sizeof (StrSerialNum));
   if (Status != EFI_SUCCESS) {
@@ -601,6 +612,15 @@ UpdateCmdLine (CONST CHAR8 *CmdLine,
   GetDisplayCmdline ();
   CmdLineLen += AsciiStrLen (DisplayCmdLine);
 
+  if (!IsLEVariant ()) {
+    DtboIdx = GetDtboIdx ();
+    if (DtboIdx != INVALID_PTN) {
+      AsciiSPrint (DtboIdxStr, sizeof (DtboIdxStr),
+                   " %a%d", AndroidBootDtboIdx, DtboIdx);
+      CmdLineLen += AsciiStrLen (DtboIdxStr);
+    }
+  }
+
   Param.Recovery = Recovery;
   Param.MultiSlotBoot = MultiSlotBoot;
   Param.AlarmBoot = AlarmBoot;
@@ -627,6 +647,7 @@ UpdateCmdLine (CONST CHAR8 *CmdLine,
   Param.SkipRamFs = SkipRamFs;
   Param.RootCmdLine = RootCmdLine;
   Param.InitCmdline = InitCmdline;
+  Param.DtboIdxStr = DtboIdxStr;
 
   Status = UpdateCmdLineParams (&Param, FinalCmdLine);
   if (Status != EFI_SUCCESS) {

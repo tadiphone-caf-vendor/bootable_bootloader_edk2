@@ -13,9 +13,13 @@ ifneq ($(wildcard $(SDCLANG_PATH)),)
   ABL_USE_SDLLVM := true
 endif
 
-# LD is not available for older Android versions
+# LD & make are not available in prebuilts for older Android versions
 ifeq (1,$(filter 1,$(shell echo "$$(( $(PLATFORM_SDK_VERSION) > 27 ))" )))
 LDOPT="-fuse-ld=$(ANDROID_TOP)/$(SOONG_LLVM_PREBUILTS_PATH)/ld.lld"
+MAKEPATH=$(ANDROID_TOP)/prebuilts/build-tools/linux-x86/bin/
+  ifeq (,$(wildcard $(MAKEPATH)make))
+    MAKEPATH :=
+  endif
 endif
 
 # Use host tools from prebuilts. Partner should determine the correct host tools to use
@@ -101,11 +105,12 @@ $(ABL_OUT):
 
 # Top level target
 $(TARGET_ABL): abl_clean | $(ABL_OUT) $(INSTALLED_KEYSTOREIMAGE_TARGET)
-	$(MAKE) -C bootable/bootloader/edk2 \
+	$(MAKEPATH)make -C bootable/bootloader/edk2 \
 		BOOTLOADER_OUT=../../../$(ABL_OUT) \
 		all \
 		PREBUILT_HOST_TOOLS=$(PREBUILT_HOST_TOOLS) \
 		PREBUILT_PYTHON_PATH=$(PREBUILT_PYTHON_PATH) \
+		MAKEPATH=$(MAKEPATH) \
 		$(BUILD_SYSTEM_ROOT_IMAGE) \
 		$(VERIFIED_BOOT) \
 		$(VERIFIED_BOOT_2) \

@@ -7,6 +7,7 @@ export $(BOOTLOADER_OUT)
 
 BUILDDIR=$(shell pwd)
 export WRAPPER := $(PREBUILT_PYTHON_PATH) $(BUILDDIR)/clang-wrapper.py
+export MAKEPATH := $(MAKEPATH)
 
 export CLANG35_BIN := $(CLANG_BIN)
 export CLANG35_GCC_TOOLCHAIN := $(CLANG35_GCC_TOOLCHAIN)
@@ -125,7 +126,7 @@ cleanall:
 
 EDK_TOOLS_BIN:
 	@. ./edksetup.sh BaseTools && \
-	$(MAKE) -C $(EDK_TOOLS) $(PREBUILT_HOST_TOOLS) -j1
+	$(MAKEPATH)make -C $(EDK_TOOLS) $(PREBUILT_HOST_TOOLS) -j1
 
 ABL_FV_IMG: EDK_TOOLS_BIN
 	@. ./edksetup.sh BaseTools && \

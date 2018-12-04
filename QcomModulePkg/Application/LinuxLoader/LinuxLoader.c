@@ -60,7 +60,7 @@ AllocateUnSafeStackPtr (VOID)
 
   EFI_STATUS Status = EFI_SUCCESS;
 
-  UnSafeStackPtr = AllocatePool (BOOT_LOADER_MAX_UNSAFE_STACK_SIZE);
+  UnSafeStackPtr = AllocateZeroPool (BOOT_LOADER_MAX_UNSAFE_STACK_SIZE);
   if (UnSafeStackPtr == NULL) {
     DEBUG ((EFI_D_ERROR, "Failed to Allocate memory for UnSafeStack \n"));
     Status = EFI_OUT_OF_RESOURCES;
@@ -146,7 +146,7 @@ LinuxLoaderEntry (IN EFI_HANDLE ImageHandle, IN EFI_SYSTEM_TABLE *SystemTable)
   EFI_STATUS Status;
 
   UINT32 BootReason = NORMAL_MODE;
-  UINT32 KeyPressed;
+  UINT32 KeyPressed = SCAN_NULL;
   /* MultiSlot Boot */
   BOOLEAN MultiSlotBoot;
 

@@ -34,21 +34,15 @@
 #include "UpdateDeviceTree.h"
 #include "AutoGen.h"
 #include <Library/UpdateDeviceTree.h>
-#include <Library/PartitionTableUpdate.h>
-#include <Library/HypervisorMvCalls.h>
 #include <Protocol/EFIChipInfoTypes.h>
 #include <Protocol/EFIRng.h>
 
 #define DTB_PAD_SIZE 2048
 #define NUM_SPLASHMEM_PROP_ELEM 4
 #define DEFAULT_CELL_SIZE 2
-#define MAX_PATH_SIZE 128
 
 STATIC struct FstabNode FstabTable = {"/firmware/android/fstab", "dev",
                                       "/soc/"};
-STATIC VmLinuxNode VmLinuxProp = {"android,vm-linux",
-        "/dev/block/platform/soc/8804000.sdhci/by-name/vm-linux",
-        "emmc", "ro", "wait,slotselect", "no"};
 STATIC struct DisplaySplashBufferInfo splashBuf;
 STATIC UINTN splashBufSize = sizeof (splashBuf);
 
@@ -549,9 +543,6 @@ UpdateDeviceTree (VOID *fdt,
   /* Update fstab node */
   DEBUG ((EFI_D_VERBOSE, "Start DT fstab node update: %lu ms\n",
           GetTimerCountms ()));
-  if (GetPartitionIndex ((CHAR16 *)L"vm-linux_a") != INVALID_PTN) {
-          AddVmNode (fdt);
-  }
   UpdateFstabNode (fdt);
   DEBUG ((EFI_D_VERBOSE, "End DT fstab node update: %lu ms\n",
           GetTimerCountms ()));
@@ -559,113 +550,6 @@ UpdateDeviceTree (VOID *fdt,
   fdt_pack (fdt);
 
   return ret;
-}
-
-/* Update device tree for fstab node adding vm-linux*/
-EFI_STATUS
-AddVmNode (VOID *fdt)
-{
-  INT32 ParentOffset = 0;
-  INTN   node;
-  INT32  err;
-  INT32  VbMetaOffset = 0;
-  CHAR8  VbMetaPath[MAX_PATH_SIZE] = "/firmware/android/vbmeta";
-  CHAR8  AddStr[MAX_PATH_SIZE] = ",vm-linux";
-  struct FstabNode Table = FstabTable;
-  VmLinuxNode Node = VmLinuxProp;
-  CONST struct fdt_property *Prop = NULL;
-  INT32 PropLen = 0;
-  CHAR8 *ReplaceStr = NULL;
-
-  ParentOffset = fdt_path_offset (fdt, Table.ParentNode);
-  if (ParentOffset < 0) {
-    DEBUG ((EFI_D_VERBOSE, "Failed to Get parent node: fstab\terror: %d\n",
-            ParentOffset));
-    return EFI_NOT_FOUND;
-  }
-  DEBUG ((EFI_D_VERBOSE, "Node: %a found.\n",
-          fdt_get_name (fdt, ParentOffset, NULL)));
-
-  node = fdt_add_subnode (fdt, ParentOffset, "vm-linux");
-  err = fdt_setprop (fdt, node, "status", Node.StatusProp,
-                          AsciiStrLen (Node.StatusProp));
-  if (err) {
-     DEBUG ((EFI_D_ERROR, "Failed to update status property "
-                          "of vm-linux with %d error\n", err));
-     goto fail;
-  }
-  err = fdt_setprop (fdt, node, "fsmgr_flags", Node.FsmgrFlags,
-                          AsciiStrLen (Node.FsmgrFlags));
-  if (err) {
-     DEBUG ((EFI_D_ERROR, "Failed to update fsmgr_flags property "
-                          "of vm-linux with %d error\n", err));
-     goto fail;
-  }
-  err = fdt_setprop (fdt, node, "mnt_flags", Node.MntFlags,
-                          AsciiStrLen (Node.MntFlags));
-  if (err) {
-     DEBUG ((EFI_D_ERROR, "Failed to update mnt_flags property "
-                          "of vm-linux with %d error\n", err));
-     goto fail;
-  }
-  err = fdt_setprop (fdt, node, "type", Node.Type,
-                        AsciiStrLen (Node.Type));
-  if (err) {
-     DEBUG ((EFI_D_ERROR, "Failed to update type property "
-                          "of vm-linux with %d error\n", err));
-     goto fail;
-  }
-  err = fdt_setprop (fdt, node, "dev", Node.Dev, AsciiStrLen (Node.Dev));
-  if (err) {
-     DEBUG ((EFI_D_ERROR, "Failed to update dev property "
-                          "of vm-linux with %d error\n", err));
-     goto fail;
-  }
-  err = fdt_setprop (fdt, node, "compatible", Node.Compatible,
-                          AsciiStrLen (Node.Compatible));
-  if (err) {
-     DEBUG ((EFI_D_ERROR, "Failed to update compatible property "
-                          "of vm-linux with %d error\n", err));
-     goto fail;
-  }
-
-  VbMetaOffset = fdt_path_offset (fdt, VbMetaPath);
-
-  Prop = fdt_get_property (fdt, VbMetaOffset, "parts", &PropLen);
-  if (!Prop) {
-    DEBUG ((EFI_D_ERROR, "Property of vbmeta not found\n"));
-    return EFI_NOT_FOUND;
-  }
-  ReplaceStr = AllocateZeroPool ((sizeof (CHAR8)) * (MAX_PATH_SIZE));
-  if (!ReplaceStr) {
-    DEBUG ((EFI_D_ERROR, "AddVmNode buffer: Out of resources\n"));
-    return EFI_OUT_OF_RESOURCES;
-  }
-  /* Keep a copy of vbmeta - parts */
-  gBS->CopyMem (ReplaceStr, (CHAR8 *) Prop->data, PropLen);
-
-  err = fdt_delprop (fdt, VbMetaOffset, "parts");
-  if (err) {
-     DEBUG ((EFI_D_ERROR, "Failed to delete parts property "
-                          "of vbmeta with %d error\n", err));
-     goto fail;
-  }
-  /* One extra character space for null */
-  AsciiStrnCat (ReplaceStr, AddStr, AsciiStrLen (AddStr) + 1);
-
-  err = fdt_setprop (fdt, VbMetaOffset,
-                          "parts", ReplaceStr,
-                          AsciiStrLen (ReplaceStr) + 1);
-  if (err) {
-     DEBUG ((EFI_D_ERROR, "Failed to set parts property "
-                          "of vbmeta with %d error\n", err));
-     goto fail;
-  }
-
-  return EFI_SUCCESS;
-
-fail:
-  return EFI_INVALID_PARAMETER;
 }
 
 /* Update device tree for fstab node */

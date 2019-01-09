@@ -1,4 +1,4 @@
-/* Copyright (c) 2015-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2015-2017, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -58,15 +58,6 @@ struct FstabNode {
   CONST CHAR8 *Property;   /* Property Name */
   CONST CHAR8 *DevicePathId;
 };
-/* Properties to be added to the vm-linux node of fstab dynamically*/
-typedef struct VmLinuxProperties {
-  CONST CHAR8 *Compatible;
-  CONST CHAR8 *Dev;
-  CONST CHAR8 *Type;
-  CONST CHAR8 *MntFlags;
-  CONST CHAR8 *FsmgrFlags;
-  CONST CHAR8 *StatusProp;
-}VmLinuxNode;
 
 struct DisplaySplashBufferInfo {
   /* Version number used to track changes to the structure */
@@ -90,8 +81,6 @@ UpdateDeviceTree (VOID *DeviceTreeLoadAddr,
                   UINT32 RamDiskSize,
                   BOOLEAN BootingWith32BitKernel);
 
-EFI_STATUS
-AddVmNode (VOID *fdt);
 EFI_STATUS
 UpdateFstabNode (VOID *fdt);
 

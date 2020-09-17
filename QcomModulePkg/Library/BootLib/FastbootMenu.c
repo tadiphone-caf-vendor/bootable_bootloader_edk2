@@ -152,6 +152,13 @@ STATIC MENU_MSG_INFO mFastbootCommonMsgInfo[] = {
      COMMON,
      0,
      NOACTION},
+     {{"CUSTOM ABL VERSION - "},
+     COMMON_FACTOR,
+     BGR_WHITE,
+     BGR_BLACK,
+     COMMON,
+     0,
+     NOACTION},
 };
 
 /**
@@ -300,6 +307,12 @@ FastbootMenuShowScreen (OPTION_MENU_INFO *OptionMenuInfo)
           mFastbootCommonMsgInfo[i].Msg, sizeof (mFastbootCommonMsgInfo[i].Msg),
           IsUnlocked () ? "unlocked" : "locked",
           IsUnlocked () ? AsciiStrLen ("unlocked") : AsciiStrLen ("locked"));
+      break;
+    case 9:
+      /* Print custom ABL version */
+      AsciiStrnCatS (mFastbootCommonMsgInfo[i].Msg,
+        sizeof (mFastbootCommonMsgInfo[i].Msg), ABL_VERSION,
+        AsciiStrLen (ABL_VERSION));
       break;
     }
 
